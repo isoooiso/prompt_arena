@@ -245,14 +245,13 @@ pre {
         return;
       }
 
-      account = createAccount(); // demo account (может быть без баланса)
+      account = createAccount();
       client = createClient({
         chain: studionet,
-        endpoint: "https://studio.genlayer.com/api", // studionet endpoint :contentReference[oaicite:2]{index=2}
+        endpoint: "https://studio.genlayer.com/api",
         account,
       });
 
-      // ВАЖНО: обязательная инициализация перед взаимодействием :contentReference[oaicite:3]{index=3}
       await client.initializeConsensusSmartContract();
 
       $("connStatus").innerText =
@@ -291,12 +290,11 @@ pre {
         address: contractAddress,
         functionName: "submit_prompt",
         args: [promptText],
-        value: 0, // в доках пример с number :contentReference[oaicite:4]{index=4}
+        value: 0,
       });
 
       $("connStatus").innerText = "Tx sent: " + String(hash);
 
-      // Чтобы не казалось, что “ничего не происходит” — ждём финализации :contentReference[oaicite:5]{index=5}
       const receipt = await client.waitForTransactionReceipt({
         hash,
         status: "FINALIZED",
@@ -347,7 +345,6 @@ pre {
       $("finalStatus").innerText = "Finalized ✅";
       notify("Finalized ✅");
 
-      // Тут ты обычно делаешь readContract, чтобы реально показать leaderboard.
 
     } catch (err) {
       console.error(err);
