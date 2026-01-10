@@ -201,48 +201,50 @@ pre {
 <div class="toast" id="toast"></div>
 
 <script type="module">
-console.log("JS LOADED (module)");
+  console.log("JS LOADED (module)");
 
-import * as genlayer from "https://esm.sh/genlayer-js@latest";
-import { genlayer as chain } from "https://esm.sh/genlayer-js@latest/chains";
+  import { createClient, createAccount } from "https://esm.sh/genlayer-js@0.18.9";
+  import { studionet } from "https://esm.sh/genlayer-js@0.18.9/chains";
 
-const { createClient, createAccount } = genlayer;
+  let client = null;
+  let contractAddress = null;
 
-let client = null;
-let contractAddress = null;
-
-function toast(msg) {
-  alert(msg);
-}
-
-document.getElementById("connectBtn").onclick = async () => {
-  console.log("Connect clicked");
-
-  try {
-    contractAddress = document.getElementById("addr").value.trim();
-    if (!contractAddress) {
-      toast("No address");
-      return;
-    }
-
-    const account = createAccount();
-    client = createClient({
-      chain,
-      account
-    });
-
-    document.getElementById("connStatus").innerText =
-      "Connected: " + account.address.slice(0, 8) + "...";
-
-    document.getElementById("submitBtn").disabled = false;
-    document.getElementById("finalizeBtn").disabled = false;
-
-    toast("Connected OK");
-  } catch (e) {
-    console.error(e);
-    toast("Connect error");
+  function toast(msg) {
+    alert(msg);
   }
-};
+
+  document.getElementById("connectBtn").onclick = async () => {
+    console.log("Connect clicked");
+
+    try {
+      contractAddress = document.getElementById("addr").value.trim();
+      if (!contractAddress) {
+        toast("No address");
+        return;
+      }
+
+      const account = createAccount(); // random private key account (dev/demo)
+      client = createClient({
+        chain: studionet,
+        account,
+      });
+
+      // quick sanity check
+      console.log("client:", client);
+
+      document.getElementById("connStatus").innerText =
+        "Connected: " + account.address.slice(0, 8) + "...";
+
+      document.getElementById("submitBtn").disabled = false;
+      document.getElementById("finalizeBtn").disabled = false;
+
+      toast("Connected OK");
+    } catch (e) {
+      console.error(e);
+      toast("Connect error: " + (e?.message ?? e));
+    }
+  };
 </script>
+
 </body>
 </html>
