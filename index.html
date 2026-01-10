@@ -4,8 +4,6 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Prompt Arena</title>
-
-<script src="https://cdn.jsdelivr.net/npm/genlayer-js@latest/dist/index.umd.js"></script>
   
 <style>
 :root {
@@ -202,11 +200,13 @@ pre {
 
 <div class="toast" id="toast"></div>
 
-<script>
-console.log("JS LOADED");
-console.log("GenLayer global:", window.GenLayer);
+<script type="module">
+console.log("JS LOADED (module)");
 
-const { createClient, createAccount } = window.GenLayer;
+import * as genlayer from "https://esm.sh/genlayer-js@latest";
+import { genlayer as chain } from "https://esm.sh/genlayer-js@latest/chains";
+
+const { createClient, createAccount } = genlayer;
 
 let client = null;
 let contractAddress = null;
@@ -227,7 +227,7 @@ document.getElementById("connectBtn").onclick = async () => {
 
     const account = createAccount();
     client = createClient({
-      chain: "genlayer",
+      chain,
       account
     });
 
