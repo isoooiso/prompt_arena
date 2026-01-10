@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Prompt Arena</title>
+
+<style>
+:root {
+  --bg: #0b0f19;
+  --card: #121829;
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --accent: #6366f1;
+  --accent-2: #22c55e;
+  --danger: #ef4444;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  background: linear-gradient(180deg, #0b0f19, #020617);
+  color: var(--text);
+}
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 32px 16px 80px;
+}
+
+h1 {
+  font-size: 36px;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: var(--muted);
+  margin-bottom: 32px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.4);
+}
+
+label {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+input, textarea {
+  width: 100%;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: none;
+  background: #0b1020;
+  color: var(--text);
+  font-size: 14px;
+}
+
+textarea { resize: vertical; min-height: 120px; }
+
+button {
+  margin-top: 12px;
+  width: 100%;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--accent);
+  color: white;
+  transition: transform .08s ease, box-shadow .08s ease, opacity .15s;
+  box-shadow: 0 6px 20px rgba(99,102,241,.4);
+}
+
+button.secondary {
+  background: #1f2937;
+  box-shadow: none;
+}
+
+button:active {
+  transform: translateY(2px) scale(.98);
+  box-shadow: 0 3px 10px rgba(0,0,0,.4);
+}
+
+button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.status {
+  font-size: 14px;
+  margin-top: 8px;
+  color: var(--muted);
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.badge.green { background: rgba(34,197,94,.15); color: var(--accent-2); }
+.badge.blue { background: rgba(99,102,241,.15); color: var(--accent); }
+
+.loader {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.toast {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #020617;
+  border: 1px solid #1f2937;
+  padding: 14px 20px;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.5);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .25s, transform .25s;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-6px);
+}
+
+pre {
+  background: #020617;
+  border-radius: 12px;
+  padding: 14px;
+  overflow-x: auto;
+  font-size: 13px;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+  <h1>🎨 Prompt Arena</h1>
+  <div class="subtitle">Write the best prompt. AI validators choose the Top-3.</div>
+
+  <div class="grid">
+    <div class="card">
+      <label>Contract address</label>
+      <input id="addr" placeholder="0x..." />
+      <button id="connectBtn">Connect</button>
+      <div class="status" id="connStatus">Not connected</div>
+    </div>
+
+    <div class="card">
+      <label>Your prompt</label>
+      <textarea id="prompt" placeholder="Write your best prompt here..."></textarea>
+      <button id="submitBtn" disabled>Submit prompt</button>
+    </div>
+
+    <div class="card">
+      <button id="finalizeBtn" class="secondary" disabled>
+        Finalize & generate leaderboard
+      </button>
+      <div class="status" id="finalStatus">Waiting</div>
+    </div>
+
+    <div class="card">
+      <h3>Leaderboard</h3>
+      <pre id="leaderboard">{ }</pre>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { simulator } from "https://esm.sh/genlayer-js/chains";
+import { createClient, createAccount } from "https://esm.sh/genlayer-js";
+import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
+
+let client, address;
+
+const toast = (msg) => {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2600);
+};
+
+const setLoading = (btn, on) => {
+  btn.disabled = on;
+  btn.innerHTML = on ? `<span class="loader"></span>` : btn.dataset.label;
+};
+
+document.getElementById("connectBtn").onclick = async (e) => {
+  const btn = e.target;
+  btn.dataset.label = "Connect";
+  setLoading(btn, true);
+  try {
+    address = document.getElementById("addr").value.trim();
+    const account = createAccount();
+    client = createClient({ chain: simulator, account });
+    document.getElementById("connStatus").innerHTML =
+      `Connected <span class="badge green">${account.address.slice(0,6)}…</span>`;
+    document.getElementById("submitBtn").disabled = false;
+    document.getElementById("finalizeBtn").disabled = false;
+    toast("Connected");
+  } catch {
+    toast("Connection failed");
+  }
+  setLoading(btn, false);
+};
+
+document.getElementById("submitBtn").onclick = async (e) => {
+  const btn = e.target;
+  btn.dataset.label = "Submit prompt";
+  setLoading(btn, true);
+  try {
+    const p = document.getElementById("prompt").value.trim();
+    const hash = await client.writeContract({
+      address,
+      functionName: "submit_prompt",
+      args: [p],
+      value: 0n,
+    });
+    await client.waitForTransactionReceipt({ hash, status: TransactionStatus.FINALIZED });
+    toast("Prompt submitted");
+  } catch {
+    toast("Submit failed");
+  }
+  setLoading(btn, false);
+};
+
+document.getElementById("finalizeBtn").onclick = async (e) => {
+  const btn = e.target;
+  btn.dataset.label = "Finalize & generate leaderboard";
+  setLoading(btn, true);
+  try {
+    const hash = await client.writeContract({
+      address,
+      functionName: "finalize",
+      args: [],
+      value: 0n,
+    });
+    await client.waitForTransactionReceipt({ hash, status: TransactionStatus.FINALIZED });
+    const board = await client.readContract({
+      address,
+      functionName: "get_leaderboard",
+      args: [],
+    });
+    document.getElementById("leaderboard").textContent = board;
+    document.getElementById("finalStatus").innerHTML =
+      `Finalized <span class="badge blue">AI consensus</span>`;
+    toast("Leaderboard ready");
+  } catch {
+    toast("Finalize failed");
+  }
+  setLoading(btn, false);
+};
+</script>
+</body>
+</html>
