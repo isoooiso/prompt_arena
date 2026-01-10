@@ -201,7 +201,7 @@ pre {
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { simulator } from "https://esm.sh/genlayer-js/chains";
+import { genlayer } from "https://esm.sh/genlayer-js/chains";
 import { createClient, createAccount } from "https://esm.sh/genlayer-js";
 import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
 
@@ -226,7 +226,7 @@ document.getElementById("connectBtn").onclick = async (e) => {
   try {
     address = document.getElementById("addr").value.trim();
     const account = createAccount();
-    client = createClient({ chain: simulator, account });
+    client = createClient({ chain: genlayer, account });
     document.getElementById("connStatus").innerHTML =
       `Connected <span class="badge green">${account.address.slice(0,6)}…</span>`;
     document.getElementById("submitBtn").disabled = false;
