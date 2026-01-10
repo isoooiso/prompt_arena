@@ -201,49 +201,130 @@ pre {
 <div class="toast" id="toast"></div>
 
 <script type="module">
-  console.log("JS LOADED (module)");
+  console.log("Prompt Arena JS loaded");
 
   import { createClient, createAccount } from "https://esm.sh/genlayer-js@0.18.9";
   import { studionet } from "https://esm.sh/genlayer-js@0.18.9/chains";
-  console.log({ createClient, createAccount, studionet });
-
 
   let client = null;
+  let account = null;
   let contractAddress = null;
 
-  function toast(msg) {
-    alert(msg);
+  const $ = (id) => document.getElementById(id);
+
+  function notify(message) {
+    console.log(message);
+    alert(message);
   }
 
-  document.getElementById("connectBtn").onclick = async () => {
+  // -----------------------------
+  // CONNECT
+  // -----------------------------
+  $("connectBtn").onclick = async () => {
     console.log("Connect clicked");
 
     try {
-      contractAddress = document.getElementById("addr").value.trim();
+      contractAddress = $("addr").value.trim();
       if (!contractAddress) {
-        toast("No address");
+        notify("Please enter a contract address");
         return;
       }
 
-      const account = createAccount(); // random private key account (dev/demo)
+      account = createAccount(); // demo account
       client = createClient({
         chain: studionet,
         account,
       });
 
-      // quick sanity check
-      console.log("client:", client);
+      console.log("Connected account:", account.address);
 
-      document.getElementById("connStatus").innerText =
+      $("connStatus").innerText =
         "Connected: " + account.address.slice(0, 8) + "...";
 
-      document.getElementById("submitBtn").disabled = false;
-      document.getElementById("finalizeBtn").disabled = false;
+      $("submitBtn").disabled = false;
+      $("finalizeBtn").disabled = false;
 
-      toast("Connected OK");
-    } catch (e) {
-      console.error(e);
-      toast("Connect error: " + (e?.message ?? e));
+      notify("Connected to GenLayer Studio");
+    } catch (err) {
+      console.error(err);
+      notify("Connection failed");
+    }
+  };
+
+  // -----------------------------
+  // SUBMIT PROMPT
+  // -----------------------------
+  $("submitBtn").onclick = async () => {
+    console.log("Submit prompt clicked");
+
+    try {
+      if (!client) {
+        notify("Not connected");
+        return;
+      }
+
+      const promptText = $("prompt").value.trim();
+      if (!promptText) {
+        notify("Prompt cannot be empty");
+        return;
+      }
+
+      $("submitBtn").disabled = true;
+      $("connStatus").innerText = "Submitting prompt...";
+
+      const txHash = await client.writeContract({
+        address: contractAddress,
+        functionName: "submit_prompt",
+        args: [promptText],
+        value: 0n,
+      });
+
+      console.log("submit_prompt tx:", txHash);
+
+      $("connStatus").innerText = "Prompt submitted";
+      notify("Prompt submitted successfully");
+
+    } catch (err) {
+      console.error(err);
+      notify("Prompt submission failed");
+    } finally {
+      $("submitBtn").disabled = false;
+    }
+  };
+
+  // -----------------------------
+  // FINALIZE GAME
+  // -----------------------------
+  $("finalizeBtn").onclick = async () => {
+    console.log("Finalize clicked");
+
+    try {
+      if (!client) {
+        notify("Not connected");
+        return;
+      }
+
+      $("finalizeBtn").disabled = true;
+      $("finalStatus").innerText = "Finalizing...";
+
+      const txHash = await client.writeContract({
+        address: contractAddress,
+        functionName: "finalize",
+        args: [],
+        value: 0n,
+      });
+
+      console.log("finalize tx:", txHash);
+
+      $("finalStatus").innerText = "Leaderboard ready";
+      notify("Game finalized — leaderboard is ready");
+
+    } catch (err) {
+      console.error(err);
+      $("finalStatus").innerText = "Error";
+      notify("Finalization failed");
+    } finally {
+      $("finalizeBtn").disabled = false;
     }
   };
 </script>
