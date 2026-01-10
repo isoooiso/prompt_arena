@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Prompt Arena</title>
-  
+
 <style>
 :root {
   --bg: #0b0f19;
@@ -15,50 +15,24 @@
   --accent-2: #22c55e;
   --danger: #ef4444;
 }
-
 * { box-sizing: border-box; }
-
 body {
   margin: 0;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial;
   background: linear-gradient(180deg, #0b0f19, #020617);
   color: var(--text);
 }
-
-.container {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 32px 16px 80px;
-}
-
-h1 {
-  font-size: 36px;
-  margin-bottom: 8px;
-}
-
-.subtitle {
-  color: var(--muted);
-  margin-bottom: 32px;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 16px;
-}
-
+.container { max-width: 1000px; margin: 0 auto; padding: 32px 16px 80px; }
+h1 { font-size: 36px; margin-bottom: 8px; }
+.subtitle { color: var(--muted); margin-bottom: 32px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
 .card {
   background: var(--card);
   border-radius: 16px;
   padding: 20px;
   box-shadow: 0 10px 30px rgba(0,0,0,.4);
 }
-
-label {
-  font-size: 14px;
-  color: var(--muted);
-}
-
+label { font-size: 14px; color: var(--muted); }
 input, textarea {
   width: 100%;
   margin-top: 6px;
@@ -69,9 +43,7 @@ input, textarea {
   color: var(--text);
   font-size: 14px;
 }
-
 textarea { resize: vertical; min-height: 120px; }
-
 button {
   margin-top: 12px;
   width: 100%;
@@ -86,54 +58,10 @@ button {
   transition: transform .08s ease, box-shadow .08s ease, opacity .15s;
   box-shadow: 0 6px 20px rgba(99,102,241,.4);
 }
-
-button.secondary {
-  background: #1f2937;
-  box-shadow: none;
-}
-
-button:active {
-  transform: translateY(2px) scale(.98);
-  box-shadow: 0 3px 10px rgba(0,0,0,.4);
-}
-
-button:disabled {
-  opacity: .45;
-  cursor: not-allowed;
-}
-
-.status {
-  font-size: 14px;
-  margin-top: 8px;
-  color: var(--muted);
-}
-
-.badge {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  margin-left: 6px;
-}
-
-.badge.green { background: rgba(34,197,94,.15); color: var(--accent-2); }
-.badge.blue { background: rgba(99,102,241,.15); color: var(--accent); }
-
-.loader {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255,255,255,.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  display: inline-block;
-  vertical-align: middle;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+button.secondary { background: #1f2937; box-shadow: none; }
+button:active { transform: translateY(2px) scale(.98); box-shadow: 0 3px 10px rgba(0,0,0,.4); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.status { font-size: 14px; margin-top: 8px; color: var(--muted); }
 
 .toast {
   position: fixed;
@@ -148,12 +76,9 @@ button:disabled {
   opacity: 0;
   pointer-events: none;
   transition: opacity .25s, transform .25s;
+  max-width: min(720px, calc(100vw - 32px));
 }
-
-.toast.show {
-  opacity: 1;
-  transform: translateX(-50%) translateY(-6px);
-}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
 
 pre {
   background: #020617;
@@ -162,6 +87,8 @@ pre {
   overflow-x: auto;
   font-size: 13px;
 }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+@media (max-width: 720px) { .row { grid-template-columns: 1fr; } }
 </style>
 </head>
 
@@ -192,7 +119,11 @@ pre {
     </div>
 
     <div class="card">
-      <h3>Leaderboard</h3>
+      <h3 style="margin-top:0">Leaderboard</h3>
+      <div class="row">
+        <button id="refreshBtn" class="secondary" disabled>Refresh leaderboard</button>
+        <button id="showSchemaBtn" class="secondary" disabled>Show contract schema</button>
+      </div>
       <pre id="leaderboard">{ }</pre>
     </div>
   </div>
@@ -212,46 +143,126 @@ pre {
 
   const $ = (id) => document.getElementById(id);
 
-  function notify(message) {
-    console.log(message);
-    alert(message);
+  function toast(message, ms = 2200) {
+    const el = $("toast");
+    el.textContent = message;
+    el.classList.add("show");
+    window.clearTimeout(toast._t);
+    toast._t = window.setTimeout(() => el.classList.remove("show"), ms);
   }
 
-  function setBusy(id, text) {
-    const btn = $(id);
+  function setButtonBusy(btnId, busyText) {
+    const btn = $(btnId);
+    const oldText = btn.innerText;
     btn.disabled = true;
-    const old = btn.innerText;
-    btn.innerText = text;
+    btn.innerText = busyText;
     return () => {
       btn.disabled = false;
-      btn.innerText = old;
+      btn.innerText = oldText;
     };
   }
 
-  async function ensureConnected() {
-    if (!client) throw new Error("Not connected");
+  function shortHash(h) {
+    const s = String(h ?? "");
+    if (s.length <= 14) return s;
+    return s.slice(0, 10) + "..." + s.slice(-4);
+  }
+
+  function ensureConnected() {
+    if (!client) throw new Error("Not connected (press Connect first)");
     if (!contractAddress) throw new Error("No contract address");
+  }
+
+  async function getSchema() {
+    ensureConnected();
+    const schema = await client.getContractSchema({ address: contractAddress });
+    console.log("Contract schema:", schema);
+    return schema;
+  }
+
+  function pickLeaderboardViewFn(schema) {
+    // Ищем readonly методы и пытаемся угадать лидерборд
+    const methods = schema?.methods ?? {};
+    const readonly = Object.entries(methods).filter(([_, m]) => m?.readonly);
+
+    const exact =
+      readonly.find(([n]) => n === "get_leaderboard")?.[0] ||
+      readonly.find(([n]) => n === "leaderboard")?.[0];
+
+    if (exact) return exact;
+
+    // более гибкий поиск
+    const candidates = readonly
+      .map(([n]) => n)
+      .filter((n) =>
+        n.toLowerCase().includes("leader") ||
+        n.toLowerCase().includes("top") ||
+        n.toLowerCase().includes("rank") ||
+        n.toLowerCase().includes("winner")
+      );
+
+    return candidates[0] ?? null;
+  }
+
+  async function refreshLeaderboard({ stateStatus = "accepted" } = {}) {
+    ensureConnected();
+    $("leaderboard").innerText = "Loading leaderboard...";
+
+    const schema = await getSchema();
+    const fn = pickLeaderboardViewFn(schema);
+
+    if (!fn) {
+      const methods = Object.entries(schema?.methods ?? {})
+        .map(([n, m]) => `${n}${m?.readonly ? " (readonly)" : ""}`)
+        .join("\n");
+
+      $("leaderboard").innerText =
+        "❌ Could not find a readonly leaderboard method.\n\n" +
+        "Open console and check schema.methods.\n\n" +
+        "Methods:\n" + methods;
+
+      return;
+    }
+
+    let result;
+    try {
+      result = await client.readContract({
+        address: contractAddress,
+        functionName: fn,
+        args: [],
+        stateStatus, // "accepted" или "finalized"
+      });
+    } catch (e) {
+      console.error("readContract error:", e);
+      $("leaderboard").innerText =
+        `❌ readContract failed for "${fn}"\n\n` +
+        (e?.message ?? String(e));
+      return;
+    }
+
+    $("leaderboard").innerText = JSON.stringify(result, null, 2);
   }
 
   // -----------------------------
   // CONNECT
   // -----------------------------
   $("connectBtn").onclick = async () => {
-    const done = setBusy("connectBtn", "Connecting...");
+    const done = setButtonBusy("connectBtn", "Connecting...");
     try {
       contractAddress = $("addr").value.trim();
       if (!contractAddress) {
-        notify("Please enter a contract address");
+        toast("Please enter a contract address");
         return;
       }
 
-      account = createAccount();
+      account = createAccount(); // demo account
       client = createClient({
         chain: studionet,
         endpoint: "https://studio.genlayer.com/api",
         account,
       });
 
+      // ОБЯЗАТЕЛЬНО перед взаимодействием
       await client.initializeConsensusSmartContract();
 
       $("connStatus").innerText =
@@ -259,12 +270,18 @@ pre {
 
       $("submitBtn").disabled = false;
       $("finalizeBtn").disabled = false;
+      $("refreshBtn").disabled = false;
+      $("showSchemaBtn").disabled = false;
 
-      notify("Connected & initialized");
+      toast("Connected & initialized ✅");
+
+      // можно сразу подтянуть лидерборд (если метод есть)
+      try { await refreshLeaderboard(); } catch {}
     } catch (err) {
       console.error(err);
-      notify("Connection failed: " + (err?.message ?? err));
       client = null;
+      toast("Connection failed: " + (err?.message ?? err));
+      $("connStatus").innerText = "Not connected";
     } finally {
       done();
     }
@@ -274,13 +291,13 @@ pre {
   // SUBMIT PROMPT
   // -----------------------------
   $("submitBtn").onclick = async () => {
-    const done = setBusy("submitBtn", "Submitting...");
+    const done = setButtonBusy("submitBtn", "Submitting...");
     try {
-      await ensureConnected();
+      ensureConnected();
 
       const promptText = $("prompt").value.trim();
       if (!promptText) {
-        notify("Prompt cannot be empty");
+        toast("Prompt cannot be empty");
         return;
       }
 
@@ -293,23 +310,24 @@ pre {
         value: 0,
       });
 
-      $("connStatus").innerText = "Tx sent: " + String(hash);
+      $("connStatus").innerText = "Tx sent: " + shortHash(hash);
 
-      const receipt = await client.waitForTransactionReceipt({
+      await client.waitForTransactionReceipt({
         hash,
         status: "FINALIZED",
         interval: 5_000,
         retries: 30,
       });
 
-      console.log("submit_prompt receipt:", receipt);
       $("connStatus").innerText = "Prompt submitted ✅";
-      notify("Prompt submitted ✅");
+      toast("Prompt submitted ✅");
 
+      // если лидерборд меняется сразу — обновим
+      try { await refreshLeaderboard(); } catch {}
     } catch (err) {
       console.error(err);
       $("connStatus").innerText = "Submit error";
-      notify("Prompt submission failed: " + (err?.message ?? err));
+      toast("Submit failed: " + (err?.message ?? err));
     } finally {
       done();
     }
@@ -319,9 +337,9 @@ pre {
   // FINALIZE GAME
   // -----------------------------
   $("finalizeBtn").onclick = async () => {
-    const done = setBusy("finalizeBtn", "Finalizing...");
+    const done = setButtonBusy("finalizeBtn", "Finalizing...");
     try {
-      await ensureConnected();
+      ensureConnected();
 
       $("finalStatus").innerText = "Sending tx...";
 
@@ -332,24 +350,54 @@ pre {
         value: 0,
       });
 
-      $("finalStatus").innerText = "Tx sent: " + String(hash);
+      $("finalStatus").innerText = "Tx sent: " + shortHash(hash);
 
-      const receipt = await client.waitForTransactionReceipt({
+      await client.waitForTransactionReceipt({
         hash,
         status: "FINALIZED",
         interval: 5_000,
         retries: 30,
       });
 
-      console.log("finalize receipt:", receipt);
       $("finalStatus").innerText = "Finalized ✅";
-      notify("Finalized ✅");
+      toast("Finalized ✅");
 
-
+      // ВОТ ЭТОГО РАНЬШЕ НЕ БЫЛО:
+      await refreshLeaderboard({ stateStatus: "accepted" });
     } catch (err) {
       console.error(err);
       $("finalStatus").innerText = "Finalize error";
-      notify("Finalization failed: " + (err?.message ?? err));
+      toast("Finalize failed: " + (err?.message ?? err));
+    } finally {
+      done();
+    }
+  };
+
+  // -----------------------------
+  // EXTRA UI
+  // -----------------------------
+  $("refreshBtn").onclick = async () => {
+    const done = setButtonBusy("refreshBtn", "Refreshing...");
+    try {
+      await refreshLeaderboard({ stateStatus: "accepted" });
+      toast("Leaderboard refreshed ✅");
+    } catch (e) {
+      console.error(e);
+      toast("Refresh failed: " + (e?.message ?? e));
+    } finally {
+      done();
+    }
+  };
+
+  $("showSchemaBtn").onclick = async () => {
+    const done = setButtonBusy("showSchemaBtn", "Loading schema...");
+    try {
+      const schema = await getSchema();
+      $("leaderboard").innerText = JSON.stringify(schema, null, 2);
+      toast("Schema loaded ✅");
+    } catch (e) {
+      console.error(e);
+      toast("Schema failed: " + (e?.message ?? e));
     } finally {
       done();
     }
