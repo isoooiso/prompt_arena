@@ -143,111 +143,94 @@ pre {
 
   const $ = (id) => document.getElementById(id);
 
-  function toast(message, ms = 2200) {
+  function toast(msg, ms = 2200) {
     const el = $("toast");
-    el.textContent = message;
+    if (!el) return alert(msg);
+    el.textContent = msg;
     el.classList.add("show");
     window.clearTimeout(toast._t);
     toast._t = window.setTimeout(() => el.classList.remove("show"), ms);
   }
 
-  function setButtonBusy(btnId, busyText) {
+  function setBusy(btnId, text) {
     const btn = $(btnId);
-    const oldText = btn.innerText;
+    const old = btn.innerText;
     btn.disabled = true;
-    btn.innerText = busyText;
+    btn.innerText = text;
     return () => {
       btn.disabled = false;
-      btn.innerText = oldText;
+      btn.innerText = old;
     };
+  }
+
+  function ensureConnected() {
+    if (!client) throw new Error("Not connected");
+    if (!contractAddress) throw new Error("No contract address");
   }
 
   function shortHash(h) {
     const s = String(h ?? "");
-    if (s.length <= 14) return s;
-    return s.slice(0, 10) + "..." + s.slice(-4);
+    return s.length > 18 ? `${s.slice(0, 10)}...${s.slice(-4)}` : s;
   }
 
-  function ensureConnected() {
-    if (!client) throw new Error("Not connected (press Connect first)");
-    if (!contractAddress) throw new Error("No contract address");
+  // --- IMPORTANT: convert Map/BigInt/etc -> JSON-safe ---
+  function toPlain(v) {
+    if (typeof v === "bigint") return v.toString();
+
+    if (v instanceof Map) {
+      const obj = {};
+      for (const [k, val] of v.entries()) obj[String(k)] = toPlain(val);
+      return obj;
+    }
+
+    if (v instanceof Set) return Array.from(v, (x) => toPlain(x));
+
+    if (Array.isArray(v)) return v.map((x) => toPlain(x));
+
+    if (v && typeof v === "object") {
+      const out = {};
+      for (const [k, val] of Object.entries(v)) out[k] = toPlain(val);
+      return out;
+    }
+
+    return v;
   }
 
-  async function getSchema() {
+  async function refreshLeaderboard() {
     ensureConnected();
-    const schema = await client.getContractSchema({ address: contractAddress });
-    console.log("Contract schema:", schema);
-    return schema;
-  }
 
-  function pickLeaderboardViewFn(schema) {
-    // Ищем readonly методы и пытаемся угадать лидерборд
-    const methods = schema?.methods ?? {};
-    const readonly = Object.entries(methods).filter(([_, m]) => m?.readonly);
-
-    const exact =
-      readonly.find(([n]) => n === "get_leaderboard")?.[0] ||
-      readonly.find(([n]) => n === "leaderboard")?.[0];
-
-    if (exact) return exact;
-
-    // более гибкий поиск
-    const candidates = readonly
-      .map(([n]) => n)
-      .filter((n) =>
-        n.toLowerCase().includes("leader") ||
-        n.toLowerCase().includes("top") ||
-        n.toLowerCase().includes("rank") ||
-        n.toLowerCase().includes("winner")
-      );
-
-    return candidates[0] ?? null;
-  }
-
-  async function refreshLeaderboard({ stateStatus = "accepted" } = {}) {
-    ensureConnected();
     $("leaderboard").innerText = "Loading leaderboard...";
 
-    const schema = await getSchema();
-    const fn = pickLeaderboardViewFn(schema);
+    const raw = await client.readContract({
+      address: contractAddress,
+      functionName: "get_leaderboard",
+      args: [],
+      // после finalize логичнее читать finalized, чтобы не поймать старое состояние
+      stateStatus: "finalized",
+    });
 
-    if (!fn) {
-      const methods = Object.entries(schema?.methods ?? {})
-        .map(([n, m]) => `${n}${m?.readonly ? " (readonly)" : ""}`)
-        .join("\n");
+    // Debug (очень полезно, если снова будет "{ }")
+    console.log("get_leaderboard raw:", raw);
+    if (raw instanceof Map) console.log("Leaderboard Map size:", raw.size);
 
-      $("leaderboard").innerText =
-        "❌ Could not find a readonly leaderboard method.\n\n" +
-        "Open console and check schema.methods.\n\n" +
-        "Methods:\n" + methods;
+    const plain = toPlain(raw);
 
-      return;
-    }
+    const emptyObj =
+      plain &&
+      typeof plain === "object" &&
+      !Array.isArray(plain) &&
+      Object.keys(plain).length === 0;
 
-    let result;
-    try {
-      result = await client.readContract({
-        address: contractAddress,
-        functionName: fn,
-        args: [],
-        stateStatus, // "accepted" или "finalized"
-      });
-    } catch (e) {
-      console.error("readContract error:", e);
-      $("leaderboard").innerText =
-        `❌ readContract failed for "${fn}"\n\n` +
-        (e?.message ?? String(e));
-      return;
-    }
-
-    $("leaderboard").innerText = JSON.stringify(result, null, 2);
+    $("leaderboard").innerText = emptyObj
+      ? "Leaderboard is empty (0 entries)"
+      : JSON.stringify(plain, null, 2);
   }
 
   // -----------------------------
   // CONNECT
   // -----------------------------
   $("connectBtn").onclick = async () => {
-    const done = setButtonBusy("connectBtn", "Connecting...");
+    const done = setBusy("connectBtn", "Connecting...");
     try {
       contractAddress = $("addr").value.trim();
       if (!contractAddress) {
@@ -255,14 +238,14 @@ pre {
         return;
       }
 
-      account = createAccount(); // demo account
+      account = createAccount();
+
       client = createClient({
         chain: studionet,
         endpoint: "https://studio.genlayer.com/api",
         account,
       });
 
-      // ОБЯЗАТЕЛЬНО перед взаимодействием
       await client.initializeConsensusSmartContract();
 
       $("connStatus").innerText =
@@ -270,17 +253,15 @@ pre {
 
       $("submitBtn").disabled = false;
       $("finalizeBtn").disabled = false;
-      $("refreshBtn").disabled = false;
-      $("showSchemaBtn").disabled = false;
 
-      toast("Connected & initialized ✅");
+      toast("Connected ✅");
 
-      // можно сразу подтянуть лидерборд (если метод есть)
+      // можно сразу попробовать прочитать лидерборд
       try { await refreshLeaderboard(); } catch {}
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
       client = null;
-      toast("Connection failed: " + (err?.message ?? err));
+      toast("Connect error: " + (e?.message ?? e));
       $("connStatus").innerText = "Not connected";
     } finally {
       done();
@@ -291,7 +272,7 @@ pre {
   // SUBMIT PROMPT
   // -----------------------------
   $("submitBtn").onclick = async () => {
-    const done = setButtonBusy("submitBtn", "Submitting...");
+    const done = setBusy("submitBtn", "Submitting...");
     try {
       ensureConnected();
 
@@ -322,22 +303,22 @@ pre {
       $("connStatus").innerText = "Prompt submitted ✅";
       toast("Prompt submitted ✅");
 
-      // если лидерборд меняется сразу — обновим
+      // если контракт обновляет таблицу сразу — увидишь изменения
       try { await refreshLeaderboard(); } catch {}
-    } catch (err) {
-      console.error(err);
+    } catch (e) {
+      console.error(e);
       $("connStatus").innerText = "Submit error";
-      toast("Submit failed: " + (err?.message ?? err));
+      toast("Submit failed: " + (e?.message ?? e));
     } finally {
       done();
     }
   };
 
   // -----------------------------
-  // FINALIZE GAME
+  // FINALIZE
   // -----------------------------
   $("finalizeBtn").onclick = async () => {
-    const done = setButtonBusy("finalizeBtn", "Finalizing...");
+    const done = setBusy("finalizeBtn", "Finalizing...");
     try {
       ensureConnected();
 
@@ -362,42 +343,11 @@ pre {
       $("finalStatus").innerText = "Finalized ✅";
       toast("Finalized ✅");
 
-      // ВОТ ЭТОГО РАНЬШЕ НЕ БЫЛО:
-      await refreshLeaderboard({ stateStatus: "accepted" });
-    } catch (err) {
-      console.error(err);
+      await refreshLeaderboard();
+    } catch (e) {
+      console.error(e);
       $("finalStatus").innerText = "Finalize error";
-      toast("Finalize failed: " + (err?.message ?? err));
-    } finally {
-      done();
-    }
-  };
-
-  // -----------------------------
-  // EXTRA UI
-  // -----------------------------
-  $("refreshBtn").onclick = async () => {
-    const done = setButtonBusy("refreshBtn", "Refreshing...");
-    try {
-      await refreshLeaderboard({ stateStatus: "accepted" });
-      toast("Leaderboard refreshed ✅");
-    } catch (e) {
-      console.error(e);
-      toast("Refresh failed: " + (e?.message ?? e));
-    } finally {
-      done();
-    }
-  };
-
-  $("showSchemaBtn").onclick = async () => {
-    const done = setButtonBusy("showSchemaBtn", "Loading schema...");
-    try {
-      const schema = await getSchema();
-      $("leaderboard").innerText = JSON.stringify(schema, null, 2);
-      toast("Schema loaded ✅");
-    } catch (e) {
-      console.error(e);
-      toast("Schema failed: " + (e?.message ?? e));
+      toast("Finalize failed: " + (e?.message ?? e));
     } finally {
       done();
     }
