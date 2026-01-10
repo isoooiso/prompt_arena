@@ -224,11 +224,10 @@ document.getElementById("connectBtn").onclick = async () => {
       return;
     }
 
-    const account = createAccount();
     client = createClient({
-      chain: chains.genlayer,
-      account
-    });
+  chain: "genlayer",
+  account
+});
 
     document.getElementById("connStatus").innerText =
       "Connected: " + account.address.slice(0, 8) + "...";
