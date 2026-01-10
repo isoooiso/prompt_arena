@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Prompt Arena</title>
 
-<script src="https://unpkg.com/genlayer-js/dist/genlayer.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/genlayer-js@latest/dist/index.umd.js"></script>
   
 <style>
 :root {
@@ -205,7 +205,7 @@ pre {
 <script>
 console.log("JS LOADED");
 
-const { createClient, createAccount, chains } = window.genlayer;
+const { createClient, createAccount } = window.GenLayer;
 
 let client = null;
 let contractAddress = null;
