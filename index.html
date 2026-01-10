@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Prompt Arena</title>
 
+<script src="https://unpkg.com/genlayer-js/dist/genlayer.umd.js"></script>
+  
 <style>
 :root {
   --bg: #0b0f19;
@@ -200,90 +202,85 @@ pre {
 
 <div class="toast" id="toast"></div>
 
-<script type="module">
+<script>
 console.log("JS LOADED");
-import { genlayer } from "https://esm.sh/genlayer-js/chains";
-import { createClient, createAccount } from "https://esm.sh/genlayer-js";
-import { TransactionStatus } from "https://esm.sh/genlayer-js/types";
 
-let client, address;
+const { createClient, createAccount, chains } = window.genlayer;
 
-const toast = (msg) => {
-  const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2600);
-};
+let client = null;
+let contractAddress = null;
 
-const setLoading = (btn, on) => {
-  btn.disabled = on;
-  btn.innerHTML = on ? `<span class="loader"></span>` : btn.dataset.label;
-};
+function toast(msg) {
+  alert(msg); // временно, для дебага
+}
 
-document.getElementById("connectBtn").onclick = async (e) => {
-  const btn = e.target;
-  btn.dataset.label = "Connect";
-  setLoading(btn, true);
+document.getElementById("connectBtn").onclick = async () => {
+  console.log("Connect clicked");
+
   try {
-    address = document.getElementById("addr").value.trim();
+    contractAddress = document.getElementById("addr").value.trim();
+    if (!contractAddress) {
+      toast("No address");
+      return;
+    }
+
     const account = createAccount();
-    client = createClient({ chain: genlayer, account });
-    document.getElementById("connStatus").innerHTML =
-      `Connected <span class="badge green">${account.address.slice(0,6)}…</span>`;
+    client = createClient({
+      chain: chains.genlayer,
+      account
+    });
+
+    document.getElementById("connStatus").innerText =
+      "Connected: " + account.address.slice(0, 8) + "...";
+
     document.getElementById("submitBtn").disabled = false;
     document.getElementById("finalizeBtn").disabled = false;
-    toast("Connected");
-  } catch {
-    toast("Connection failed");
+
+    toast("Connected OK");
+  } catch (e) {
+    console.error(e);
+    toast("Connect error");
   }
-  setLoading(btn, false);
 };
 
-document.getElementById("submitBtn").onclick = async (e) => {
-  const btn = e.target;
-  btn.dataset.label = "Submit prompt";
-  setLoading(btn, true);
+document.getElementById("submitBtn").onclick = async () => {
+  console.log("Submit clicked");
   try {
-    const p = document.getElementById("prompt").value.trim();
+    const prompt = document.getElementById("prompt").value.trim();
+    if (!prompt) {
+      toast("Empty prompt");
+      return;
+    }
+
     const hash = await client.writeContract({
-      address,
+      address: contractAddress,
       functionName: "submit_prompt",
-      args: [p],
+      args: [prompt],
       value: 0n,
     });
-    await client.waitForTransactionReceipt({ hash, status: TransactionStatus.FINALIZED });
-    toast("Prompt submitted");
-  } catch {
-    toast("Submit failed");
+
+    toast("Submitted: " + hash.slice(0, 10));
+  } catch (e) {
+    console.error(e);
+    toast("Submit error");
   }
-  setLoading(btn, false);
 };
 
-document.getElementById("finalizeBtn").onclick = async (e) => {
-  const btn = e.target;
-  btn.dataset.label = "Finalize & generate leaderboard";
-  setLoading(btn, true);
+document.getElementById("finalizeBtn").onclick = async () => {
+  console.log("Finalize clicked");
   try {
     const hash = await client.writeContract({
-      address,
+      address: contractAddress,
       functionName: "finalize",
       args: [],
       value: 0n,
     });
-    await client.waitForTransactionReceipt({ hash, status: TransactionStatus.FINALIZED });
-    const board = await client.readContract({
-      address,
-      functionName: "get_leaderboard",
-      args: [],
-    });
-    document.getElementById("leaderboard").textContent = board;
-    document.getElementById("finalStatus").innerHTML =
-      `Finalized <span class="badge blue">AI consensus</span>`;
-    toast("Leaderboard ready");
-  } catch {
-    toast("Finalize failed");
+
+    toast("Finalize tx sent");
+  } catch (e) {
+    console.error(e);
+    toast("Finalize error");
   }
-  setLoading(btn, false);
 };
 </script>
 </body>
