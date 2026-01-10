@@ -204,6 +204,7 @@ pre {
 
 <script>
 console.log("JS LOADED");
+console.log("GenLayer global:", window.GenLayer);
 
 const { createClient, createAccount } = window.GenLayer;
 
@@ -211,7 +212,7 @@ let client = null;
 let contractAddress = null;
 
 function toast(msg) {
-  alert(msg); // временно, для дебага
+  alert(msg);
 }
 
 document.getElementById("connectBtn").onclick = async () => {
@@ -224,10 +225,11 @@ document.getElementById("connectBtn").onclick = async () => {
       return;
     }
 
+    const account = createAccount();
     client = createClient({
-  chain: "genlayer",
-  account
-});
+      chain: "genlayer",
+      account
+    });
 
     document.getElementById("connStatus").innerText =
       "Connected: " + account.address.slice(0, 8) + "...";
@@ -239,46 +241,6 @@ document.getElementById("connectBtn").onclick = async () => {
   } catch (e) {
     console.error(e);
     toast("Connect error");
-  }
-};
-
-document.getElementById("submitBtn").onclick = async () => {
-  console.log("Submit clicked");
-  try {
-    const prompt = document.getElementById("prompt").value.trim();
-    if (!prompt) {
-      toast("Empty prompt");
-      return;
-    }
-
-    const hash = await client.writeContract({
-      address: contractAddress,
-      functionName: "submit_prompt",
-      args: [prompt],
-      value: 0n,
-    });
-
-    toast("Submitted: " + hash.slice(0, 10));
-  } catch (e) {
-    console.error(e);
-    toast("Submit error");
-  }
-};
-
-document.getElementById("finalizeBtn").onclick = async () => {
-  console.log("Finalize clicked");
-  try {
-    const hash = await client.writeContract({
-      address: contractAddress,
-      functionName: "finalize",
-      args: [],
-      value: 0n,
-    });
-
-    toast("Finalize tx sent");
-  } catch (e) {
-    console.error(e);
-    toast("Finalize error");
   }
 };
 </script>
