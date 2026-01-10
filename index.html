@@ -217,12 +217,27 @@ pre {
     alert(message);
   }
 
+  function setBusy(id, text) {
+    const btn = $(id);
+    btn.disabled = true;
+    const old = btn.innerText;
+    btn.innerText = text;
+    return () => {
+      btn.disabled = false;
+      btn.innerText = old;
+    };
+  }
+
+  async function ensureConnected() {
+    if (!client) throw new Error("Not connected");
+    if (!contractAddress) throw new Error("No contract address");
+  }
+
   // -----------------------------
   // CONNECT
   // -----------------------------
   $("connectBtn").onclick = async () => {
-    console.log("Connect clicked");
-
+    const done = setBusy("connectBtn", "Connecting...");
     try {
       contractAddress = $("addr").value.trim();
       if (!contractAddress) {
@@ -230,13 +245,15 @@ pre {
         return;
       }
 
-      account = createAccount(); // demo account
+      account = createAccount(); // demo account (может быть без баланса)
       client = createClient({
         chain: studionet,
+        endpoint: "https://studio.genlayer.com/api", // studionet endpoint :contentReference[oaicite:2]{index=2}
         account,
       });
 
-      console.log("Connected account:", account.address);
+      // ВАЖНО: обязательная инициализация перед взаимодействием :contentReference[oaicite:3]{index=3}
+      await client.initializeConsensusSmartContract();
 
       $("connStatus").innerText =
         "Connected: " + account.address.slice(0, 8) + "...";
@@ -244,10 +261,13 @@ pre {
       $("submitBtn").disabled = false;
       $("finalizeBtn").disabled = false;
 
-      notify("Connected to GenLayer Studio");
+      notify("Connected & initialized");
     } catch (err) {
       console.error(err);
-      notify("Connection failed");
+      notify("Connection failed: " + (err?.message ?? err));
+      client = null;
+    } finally {
+      done();
     }
   };
 
@@ -255,13 +275,9 @@ pre {
   // SUBMIT PROMPT
   // -----------------------------
   $("submitBtn").onclick = async () => {
-    console.log("Submit prompt clicked");
-
+    const done = setBusy("submitBtn", "Submitting...");
     try {
-      if (!client) {
-        notify("Not connected");
-        return;
-      }
+      await ensureConnected();
 
       const promptText = $("prompt").value.trim();
       if (!promptText) {
@@ -269,26 +285,35 @@ pre {
         return;
       }
 
-      $("submitBtn").disabled = true;
-      $("connStatus").innerText = "Submitting prompt...";
+      $("connStatus").innerText = "Sending tx...";
 
-      const txHash = await client.writeContract({
+      const hash = await client.writeContract({
         address: contractAddress,
         functionName: "submit_prompt",
         args: [promptText],
-        value: 0n,
+        value: 0, // в доках пример с number :contentReference[oaicite:4]{index=4}
       });
 
-      console.log("submit_prompt tx:", txHash);
+      $("connStatus").innerText = "Tx sent: " + String(hash);
 
-      $("connStatus").innerText = "Prompt submitted";
-      notify("Prompt submitted successfully");
+      // Чтобы не казалось, что “ничего не происходит” — ждём финализации :contentReference[oaicite:5]{index=5}
+      const receipt = await client.waitForTransactionReceipt({
+        hash,
+        status: "FINALIZED",
+        interval: 5_000,
+        retries: 30,
+      });
+
+      console.log("submit_prompt receipt:", receipt);
+      $("connStatus").innerText = "Prompt submitted ✅";
+      notify("Prompt submitted ✅");
 
     } catch (err) {
       console.error(err);
-      notify("Prompt submission failed");
+      $("connStatus").innerText = "Submit error";
+      notify("Prompt submission failed: " + (err?.message ?? err));
     } finally {
-      $("submitBtn").disabled = false;
+      done();
     }
   };
 
@@ -296,38 +321,42 @@ pre {
   // FINALIZE GAME
   // -----------------------------
   $("finalizeBtn").onclick = async () => {
-    console.log("Finalize clicked");
-
+    const done = setBusy("finalizeBtn", "Finalizing...");
     try {
-      if (!client) {
-        notify("Not connected");
-        return;
-      }
+      await ensureConnected();
 
-      $("finalizeBtn").disabled = true;
-      $("finalStatus").innerText = "Finalizing...";
+      $("finalStatus").innerText = "Sending tx...";
 
-      const txHash = await client.writeContract({
+      const hash = await client.writeContract({
         address: contractAddress,
         functionName: "finalize",
         args: [],
-        value: 0n,
+        value: 0,
       });
 
-      console.log("finalize tx:", txHash);
+      $("finalStatus").innerText = "Tx sent: " + String(hash);
 
-      $("finalStatus").innerText = "Leaderboard ready";
-      notify("Game finalized — leaderboard is ready");
+      const receipt = await client.waitForTransactionReceipt({
+        hash,
+        status: "FINALIZED",
+        interval: 5_000,
+        retries: 30,
+      });
+
+      console.log("finalize receipt:", receipt);
+      $("finalStatus").innerText = "Finalized ✅";
+      notify("Finalized ✅");
+
+      // Тут ты обычно делаешь readContract, чтобы реально показать leaderboard.
 
     } catch (err) {
       console.error(err);
-      $("finalStatus").innerText = "Error";
-      notify("Finalization failed");
+      $("finalStatus").innerText = "Finalize error";
+      notify("Finalization failed: " + (err?.message ?? err));
     } finally {
-      $("finalizeBtn").disabled = false;
+      done();
     }
   };
 </script>
-
 </body>
 </html>
