@@ -15,24 +15,41 @@
   --accent-2: #22c55e;
   --danger: #ef4444;
 }
+
 * { box-sizing: border-box; }
+
 body {
   margin: 0;
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial;
   background: linear-gradient(180deg, #0b0f19, #020617);
   color: var(--text);
 }
-.container { max-width: 1000px; margin: 0 auto; padding: 32px 16px 80px; }
+
+.container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 32px 16px 80px;
+}
+
 h1 { font-size: 36px; margin-bottom: 8px; }
+
 .subtitle { color: var(--muted); margin-bottom: 32px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
 .card {
   background: var(--card);
   border-radius: 16px;
   padding: 20px;
   box-shadow: 0 10px 30px rgba(0,0,0,.4);
 }
+
 label { font-size: 14px; color: var(--muted); }
+
 input, textarea {
   width: 100%;
   margin-top: 6px;
@@ -43,7 +60,9 @@ input, textarea {
   color: var(--text);
   font-size: 14px;
 }
+
 textarea { resize: vertical; min-height: 120px; }
+
 button {
   margin-top: 12px;
   width: 100%;
@@ -58,10 +77,35 @@ button {
   transition: transform .08s ease, box-shadow .08s ease, opacity .15s;
   box-shadow: 0 6px 20px rgba(99,102,241,.4);
 }
-button.secondary { background: #1f2937; box-shadow: none; }
-button:active { transform: translateY(2px) scale(.98); box-shadow: 0 3px 10px rgba(0,0,0,.4); }
-button:disabled { opacity: .45; cursor: not-allowed; }
-.status { font-size: 14px; margin-top: 8px; color: var(--muted); }
+
+button.secondary {
+  background: #1f2937;
+  box-shadow: none;
+}
+
+button:active {
+  transform: translateY(2px) scale(.98);
+  box-shadow: 0 3px 10px rgba(0,0,0,.4);
+}
+
+button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.status {
+  font-size: 14px;
+  margin-top: 8px;
+  color: var(--muted);
+}
+
+pre {
+  background: #020617;
+  border-radius: 12px;
+  padding: 14px;
+  overflow-x: auto;
+  font-size: 13px;
+}
 
 .toast {
   position: fixed;
@@ -78,17 +122,56 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   transition: opacity .25s, transform .25s;
   max-width: min(720px, calc(100vw - 32px));
 }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(-6px); }
 
-pre {
-  background: #020617;
-  border-radius: 12px;
-  padding: 14px;
-  overflow-x: auto;
-  font-size: 13px;
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-6px);
 }
-.row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-@media (max-width: 720px) { .row { grid-template-columns: 1fr; } }
+
+.lb-wrap { display: flex; flex-direction: column; gap: 10px; }
+
+.lb-header {
+  padding: 12px;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  background: #0b1020;
+}
+
+.lb-title { font-weight: 800; }
+.lb-sub { margin-top: 6px; color: var(--muted); line-height: 1.35; }
+.lb-notes { margin-top: 10px; color: var(--muted); line-height: 1.35; }
+
+.lb-card {
+  padding: 12px;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  background: #020617;
+}
+
+.lb-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.lb-rank { font-weight: 900; }
+.lb-player {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--muted);
+}
+
+.lb-reason { margin-top: 8px; line-height: 1.35; }
+
+.row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+@media (max-width: 720px) {
+  .row2 { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 
@@ -119,12 +202,14 @@ pre {
     </div>
 
     <div class="card">
-      <h3 style="margin-top:0">Leaderboard</h3>
-      <div class="row">
+      <h3 style="margin:0 0 10px">Leaderboard</h3>
+      <div class="row2">
         <button id="refreshBtn" class="secondary" disabled>Refresh leaderboard</button>
-        <button id="showSchemaBtn" class="secondary" disabled>Show contract schema</button>
+        <button id="rawBtn" class="secondary" disabled>Toggle raw JSON</button>
       </div>
-      <pre id="leaderboard">{ }</pre>
+
+      <div id="leaderboardNice" class="lb-wrap" style="margin-top:12px;"></div>
+      <pre id="leaderboardRaw" style="display:none; margin-top:12px;">{ }</pre>
     </div>
   </div>
 </div>
@@ -145,7 +230,6 @@ pre {
 
   function toast(msg, ms = 2200) {
     const el = $("toast");
-    if (!el) return alert(msg);
     el.textContent = msg;
     el.classList.add("show");
     window.clearTimeout(toast._t);
@@ -173,64 +257,129 @@ pre {
     return s.length > 18 ? `${s.slice(0, 10)}...${s.slice(-4)}` : s;
   }
 
-  // Map/BigInt -> JSON-friendly
-  function toPlain(v) {
-    if (typeof v === "bigint") return v.toString();
+  // --- parse + render helpers ---
+  function stripJsonCodeFence(s) {
+    if (!s) return "";
+    let t = String(s).trim();
 
-    if (v instanceof Map) {
-      const obj = {};
-      for (const [k, val] of v.entries()) obj[String(k)] = toPlain(val);
-      return obj;
+    if (t.startsWith("```")) {
+      const firstNl = t.indexOf("\n");
+      if (firstNl !== -1) t = t.slice(firstNl + 1);
+      const lastFence = t.lastIndexOf("```");
+      if (lastFence !== -1) t = t.slice(0, lastFence);
     }
-
-    if (Array.isArray(v)) return v.map(toPlain);
-
-    if (v && typeof v === "object") {
-      const out = {};
-      for (const [k, val] of Object.entries(v)) out[k] = toPlain(val);
-      return out;
-    }
-
-    return v;
+    return t.trim();
   }
 
-  async function refreshLeaderboard() {
-    ensureConnected();
-    $("leaderboard").innerText = "Loading leaderboard...";
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
 
-    // Иногда finalized может быть недоступен/давать старое в студии — пробуем finalized, потом accepted.
-    let raw;
+  function shortAddr(a) {
+    const s = String(a || "");
+    return s.length > 12 ? `${s.slice(0, 6)}...${s.slice(-4)}` : s;
+  }
+
+  function tryParseLeaderboard(raw) {
+    const cleaned = stripJsonCodeFence(raw);
+
+    // If whole JSON is wrapped in quotes
+    const maybeUnquoted =
+      (cleaned.startsWith('"') && cleaned.endsWith('"'))
+        ? cleaned.slice(1, -1).replaceAll('\\"', '"')
+        : cleaned;
+
+    return JSON.parse(maybeUnquoted);
+  }
+
+  function renderLeaderboardNice(data) {
+    const winners = Array.isArray(data?.winners) ? data.winners : [];
+
+    const header = `
+      <div class="lb-header">
+        <div class="lb-title">${escapeHtml(data?.room_id ?? "")}</div>
+        <div class="lb-sub">${escapeHtml(data?.challenge ?? "")}</div>
+        ${data?.notes ? `<div class="lb-notes"><b>Notes:</b> ${escapeHtml(data.notes)}</div>` : ""}
+      </div>
+    `;
+
+    const cards = winners
+      .slice()
+      .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0))
+      .map((w) => {
+        const rank = escapeHtml(w.rank ?? "");
+        const playerFull = escapeHtml(w.player ?? "");
+        const playerShort = escapeHtml(shortAddr(w.player ?? ""));
+        const reason = escapeHtml(w.reason ?? "");
+        return `
+          <div class="lb-card">
+            <div class="lb-row">
+              <div class="lb-rank">#${rank}</div>
+              <div class="lb-player" title="${playerFull}">${playerShort}</div>
+            </div>
+            <div class="lb-reason">${reason}</div>
+          </div>
+        `;
+      })
+      .join("");
+
+    return `<div class="lb-wrap">${header}${cards || `<div class="lb-card">No winners yet.</div>`}</div>`;
+  }
+
+  async function readLeaderboardRaw() {
+    ensureConnected();
+
+    // try finalized first, then accepted
     try {
-      raw = await client.readContract({
+      return await client.readContract({
         address: contractAddress,
         functionName: "get_leaderboard",
         args: [],
-        stateStatus: "finalized", // допустимые: accepted/finalized :contentReference[oaicite:1]{index=1}
+        stateStatus: "finalized",
       });
     } catch (e1) {
-      console.warn("readContract(finalized) failed, fallback to accepted:", e1);
-      raw = await client.readContract({
+      console.warn("readContract(finalized) failed -> accepted", e1);
+      return await client.readContract({
         address: contractAddress,
         functionName: "get_leaderboard",
         args: [],
         stateStatus: "accepted",
       });
     }
+  }
 
-    console.log("get_leaderboard raw:", raw);
-    if (raw instanceof Map) console.log("Leaderboard Map size:", raw.size);
+  async function refreshLeaderboard() {
+    ensureConnected();
+    $("leaderboardNice").innerHTML = `<div class="lb-card">Loading leaderboard...</div>`;
+    $("leaderboardRaw").innerText = "";
 
-    const plain = toPlain(raw);
+    const raw = await readLeaderboardRaw();
+    const text = String(raw ?? "").trim();
 
-    const emptyObj =
-      plain &&
-      typeof plain === "object" &&
-      !Array.isArray(plain) &&
-      Object.keys(plain).length === 0;
+    if (!text) {
+      $("leaderboardNice").innerHTML = `<div class="lb-card">Leaderboard is empty.</div>`;
+      $("leaderboardRaw").innerText = "";
+      return;
+    }
 
-    $("leaderboard").innerText = emptyObj
-      ? "Leaderboard is empty (0 entries)"
-      : JSON.stringify(plain, null, 2);
+    // raw view
+    const cleaned = stripJsonCodeFence(text);
+    $("leaderboardRaw").innerText = cleaned;
+
+    // nice view
+    try {
+      const data = tryParseLeaderboard(text);
+      $("leaderboardNice").innerHTML = renderLeaderboardNice(data);
+    } catch (e) {
+      console.error("Leaderboard parse error:", e);
+      $("leaderboardNice").innerHTML =
+        `<div class="lb-card">Could not parse JSON. Showing raw output below.</div>`;
+    }
   }
 
   // -----------------------------
@@ -252,7 +401,6 @@ pre {
         account,
       });
 
-      // важно перед взаимодействием
       await client.initializeConsensusSmartContract();
 
       $("connStatus").innerText =
@@ -260,10 +408,12 @@ pre {
 
       $("submitBtn").disabled = false;
       $("finalizeBtn").disabled = false;
+      $("refreshBtn").disabled = false;
+      $("rawBtn").disabled = false;
 
       toast("Connected ✅");
 
-      // попытка сразу показать лидерборд
+      // auto refresh
       try { await refreshLeaderboard(); } catch {}
     } catch (e) {
       console.error(e);
@@ -302,7 +452,7 @@ pre {
 
       await client.waitForTransactionReceipt({
         hash,
-        status: "FINALIZED", // :contentReference[oaicite:2]{index=2}
+        status: "FINALIZED",
         interval: 5_000,
         retries: 30,
       });
@@ -310,7 +460,7 @@ pre {
       $("connStatus").innerText = "Prompt submitted ✅";
       toast("Prompt submitted ✅");
 
-      // если лидерборд обновляется сразу — увидишь
+      // refresh (optional)
       try { await refreshLeaderboard(); } catch {}
     } catch (e) {
       console.error(e);
@@ -342,7 +492,7 @@ pre {
 
       await client.waitForTransactionReceipt({
         hash,
-        status: "FINALIZED", // :contentReference[oaicite:3]{index=3}
+        status: "FINALIZED",
         interval: 5_000,
         retries: 30,
       });
@@ -358,6 +508,30 @@ pre {
     } finally {
       done();
     }
+  };
+
+  // -----------------------------
+  // Refresh button
+  // -----------------------------
+  $("refreshBtn").onclick = async () => {
+    const done = setBusy("refreshBtn", "Refreshing...");
+    try {
+      await refreshLeaderboard();
+      toast("Leaderboard refreshed ✅");
+    } catch (e) {
+      console.error(e);
+      toast("Refresh failed: " + (e?.message ?? e));
+    } finally {
+      done();
+    }
+  };
+
+  // -----------------------------
+  // Toggle raw JSON
+  // -----------------------------
+  $("rawBtn").onclick = () => {
+    const el = $("leaderboardRaw");
+    el.style.display = (el.style.display === "none") ? "block" : "none";
   };
 </script>
 
